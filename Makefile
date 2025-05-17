@@ -41,7 +41,7 @@ services:\n\
     environment:\n\
       - TZ=UTC\n\
     restart: unless-stopped\n\
-    networks:\ Stratford-upon-Avon
+    networks:\n\
       - proxy_network\n\
   dante:\n\
     image: vimagick/dante:latest\n\
