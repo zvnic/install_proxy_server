@@ -44,15 +44,17 @@ services:\n\
     networks:\n\
       - proxy_network\n\
   dante:\n\
-    image: vimagick/dante:latest\n\
+    image: ghcr.io/linuxserver/dante:latest\n\
     container_name: dante_proxy\n\
     ports:\n\
       - \"$(SOCKS_PORT):1080\"\n\
     volumes:\n\
-      - ./sockd.conf:/etc/sockd.conf\n\
-      - ./dante.passwd:/etc/dante.passwd\n\
+      - ./sockd.conf:/config/sockd.conf\n\
+      - ./dante.passwd:/config/dante.passwd\n\
     environment:\n\
       - TZ=UTC\n\
+      - PUID=1000\n\
+      - PGID=1000\n\
     restart: unless-stopped\n\
     networks:\n\
       - proxy_network\n\
@@ -82,9 +84,12 @@ socks pass {\n\
     from: 0.0.0.0/0 to: 0.0.0.0/0\n\
     command: bind connect udpassociate\n\
     log: connect disconnect\n\
+    protocol: socks5\n\
 }" > sockd.conf
 	@cd proxy-server && htpasswd -bc squid.passwd $(USER) $(PASS)
 	@cd proxy-server && echo "$(USER):$(PASS)" > dante.passwd
+	@cd proxy-server && chmod 644 dante.passwd
+	@cd proxy-server && chown 1000:1000 dante.passwd
 
 # Start the services
 .PHONY: start
@@ -109,6 +114,7 @@ credentials:
 	@echo "Credentials saved to proxy_credentials.txt"
 
 # Clean up
+:# Clean up
 .PHONY: clean
 clean:
 	@echo "Cleaning up..."
