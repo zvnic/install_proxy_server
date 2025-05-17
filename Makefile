@@ -60,19 +60,14 @@ networks:\n\
     driver: bridge" > docker-compose.yml
 	@cd proxy-server && \
 		echo "FROM ubuntu:20.04\n\
-\n\
 RUN apt-get update && \\\n\
     apt-get install -y dante-server && \\\n\
     apt-get clean && \\\n\
     rm -rf /var/lib/apt/lists/*\n\
-\n\
 COPY sockd.conf /etc/sockd.conf\n\
 COPY dante.passwd /etc/dante.passwd\n\
-\n\
 RUN chmod 644 /etc/dante.passwd\n\
-\n\
 EXPOSE 1080\n\
-\n\
 CMD [\"sockd\"]" > Dockerfile
 	@cd proxy-server && \
 		echo "auth_param basic program /usr/lib/squid/basic_ncsa_auth /etc/squid/passwd\n\
