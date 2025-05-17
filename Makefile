@@ -31,9 +31,35 @@ clean-docker:
 	@docker rmi -f proxy-server_dante 2>/dev/null || true
 	@docker system prune -af --volumes --force || true
 
+# Create Dockerfile directly without echo
+.PHONY: create-dockerfile
+create-dockerfile:
+	@mkdir -p proxy-server
+	@cd proxy-server && cat > Dockerfile.dante << 'EOF'
+FROM vimagick/dante
+
+# Установка необходимых пакетов
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    libpam-pwdfile passwd && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+# Создание пользователя proxyuser с паролем proxypass
+RUN useradd -m -s /bin/bash $(USER) && \
+    echo "$(USER):$(PASS)" | chpasswd
+
+# Экспорт порта
+EXPOSE 1080
+
+CMD ["/usr/sbin/sockd"]
+EOF
+	@sed -i 's/\$$(USER)/$(USER)/g' proxy-server/Dockerfile.dante
+	@sed -i 's/\$$(PASS)/$(PASS)/g' proxy-server/Dockerfile.dante
+
 # Setup configuration files and passwords
 .PHONY: setup
-setup:
+setup: create-dockerfile
 	@echo "Setting up configuration files..."
 	@mkdir -p proxy-server
 	@cd proxy-server && \
@@ -61,23 +87,6 @@ services:\n\
       - ./danted.conf:/etc/danted.conf\n\
     restart: unless-stopped" > docker-compose.yml
 	@cd proxy-server && \
-		echo "FROM vimagick/dante\n\
-\n\
-# Установка необходимых пакетов\n\
-RUN apt-get update && \\\n\
-    apt-get install -y --no-install-recommends \\\n\
-    libpam-pwdfile passwd && \\\n\
-    apt-get clean && \\\n\
-    rm -rf /var/lib/apt/lists/*\n\
-\n\
-# Создание пользователя proxyuser с паролем proxypass\n\
-RUN useradd -m -s /bin/bash $(USER) && \\\n\
-    echo \"$(USER):$(PASS)\" | chpasswd\n\
-\n\
-EXPOSE 1080\n\
-\n\
-CMD [\"/usr/sbin/sockd\"]" > Dockerfile.dante
-	@cd proxy-server && \
 		echo "auth_param basic program /usr/lib/squid/basic_ncsa_auth /etc/squid/passwd\n\
 auth_param basic realm Proxy Authentication\n\
 acl authenticated proxy_auth REQUIRED\n\
@@ -100,6 +109,85 @@ socks pass {\n\
     command: bind connect udpassociate\n\
     log: connect disconnect error\n\
 }" > danted.conf
+	@cd proxy-server && htpasswd -bc squid.passwd $(USER) $(PASS)
+
+# Alternative approach with direct file creation
+.PHONY: alternative-setup
+alternative-setup:
+	@echo "Setting up configuration files (alternative method)..."
+	@mkdir -p proxy-server
+	@cd proxy-server && cat > Dockerfile.dante << 'EOF'
+FROM vimagick/dante
+
+# Установка необходимых пакетов
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    libpam-pwdfile passwd && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+# Создание пользователя proxyuser с паролем proxypass
+RUN useradd -m -s /bin/bash proxyuser && \
+    echo "proxyuser:proxypass" | chpasswd
+
+# Экспорт порта
+EXPOSE 1080
+
+CMD ["/usr/sbin/sockd"]
+EOF
+
+	@cd proxy-server && cat > docker-compose.yml << 'EOF'
+version: '3.3'
+services:
+  squid:
+    image: ubuntu/squid:latest
+    container_name: squid_proxy
+    ports:
+      - "58601:3128"
+    volumes:
+      - ./squid.conf:/etc/squid/squid.conf
+      - ./squid.passwd:/etc/squid/passwd
+    environment:
+      - TZ=UTC
+    restart: unless-stopped
+  dante:
+    build:
+      context: .
+      dockerfile: Dockerfile.dante
+    container_name: dante_proxy
+    ports:
+      - "58602:1080"
+    volumes:
+      - ./danted.conf:/etc/danted.conf
+    restart: unless-stopped
+EOF
+
+	@cd proxy-server && cat > squid.conf << 'EOF'
+auth_param basic program /usr/lib/squid/basic_ncsa_auth /etc/squid/passwd
+auth_param basic realm Proxy Authentication
+acl authenticated proxy_auth REQUIRED
+http_access allow authenticated
+http_access deny all
+http_port 3128
+EOF
+
+	@cd proxy-server && cat > danted.conf << 'EOF'
+logoutput: stderr
+internal: 0.0.0.0 port = 1080
+external: eth0
+socksmethod: username
+user.privileged: root
+user.unprivileged: nobody
+client pass {
+    from: 0.0.0.0/0 to: 0.0.0.0/0
+    log: connect disconnect error
+}
+socks pass {
+    from: 0.0.0.0/0 to: 0.0.0.0/0
+    command: bind connect udpassociate
+    log: connect disconnect error
+}
+EOF
 	@cd proxy-server && htpasswd -bc squid.passwd $(USER) $(PASS)
 
 # Start the services
@@ -156,9 +244,9 @@ prompt:
 	$(eval HTTP_PORT := $(shell read -p "Enter HTTP proxy port [3128]: " port && echo $${port:-3128}))
 	$(eval SOCKS_PORT := $(shell read -p "Enter SOCKS5 proxy port [1080]: " port && echo $${port:-1080}))
 
-# Full repair of the setup with check
+# Alternative repair that uses direct file creation
 .PHONY: repair
-repair: clean install setup start firewall credentials
+repair: clean install alternative-setup start firewall credentials
 	@echo "Repair completed. Checking if services are running..."
 	@sleep 3  # Даём время контейнерам запуститься
 	@make status
