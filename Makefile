@@ -1,126 +1,158 @@
-#!/bin/bash
+# Variables
+USER := proxyuser
+PASS := proxypass
+HTTP_PORT ?= 3128
+SOCKS_PORT ?= 1080
+IP := $(shell curl -s ifconfig.me || echo "YOUR_SERVER_IP")
 
-# Очистка Docker
-echo "Очистка Docker..."
-docker-compose down --remove-orphans 2>/dev/null || true
-docker rm -f dante_proxy squid_proxy 2>/dev/null || true
-docker rmi -f proxy-server_dante 2>/dev/null || true
-docker system prune -af --volumes
+# Default target
+.PHONY: all
+all: install setup start firewall credentials
 
-# Создание необходимых директорий и файлов
-echo "Создание файлов конфигурации..."
-mkdir -p proxy-server
-cd proxy-server
+# Install dependencies
+.PHONY: install
+install:
+	@echo "Checking and installing dependencies..."
+	@command -v docker >/dev/null 2>&1 || { sudo apt update; sudo apt install -y docker.io; }
+	@command -v docker-compose >/dev/null 2>&1 || sudo apt install -y docker-compose
+	@command -v htpasswd >/dev/null 2>&1 || sudo apt install -y apache2-utils
+	@command -v curl >/dev/null 2>&1 || sudo apt install -y curl
+	@command -v ufw >/dev/null 2>&1 || sudo apt install -y ufw
+	@sudo systemctl enable docker
+	@sudo systemctl start docker
+	@sudo ufw --force enable
 
-# Создаем debug-контейнер для определения местоположения sockd
-echo "Проверка местоположения sockd в Ubuntu 20.04..."
+# Find sockd location in a debug container
+.PHONY: find-sockd
+find-sockd:
+	@echo "Detecting sockd location..."
+	@mkdir -p proxy-server
+	@cd proxy-server && \
+		echo "FROM ubuntu:20.04\n\
+RUN apt-get update && apt-get install -y dante-server\n\
+CMD [\"bash\", \"-c\", \"echo 'Files from package:' && dpkg -L dante-server | grep -i bin && echo 'Find sockd:' && find / -name sockd -type f 2>/dev/null && echo 'Which sockd:' && which sockd || echo 'Sockd not in PATH'\"]" > debug-dockerfile
+	@cd proxy-server && docker build -t sockd-debug -f debug-dockerfile .
+	@cd proxy-server && docker run --rm sockd-debug
 
-cat > debug-dockerfile << 'EOF'
-FROM ubuntu:20.04
-RUN apt-get update && apt-get install -y dante-server
-CMD ["bash", "-c", "echo 'Files from package:' && dpkg -L dante-server | grep -i bin && echo 'Find sockd:' && find / -name sockd -type f 2>/dev/null && echo 'Which sockd:' && which sockd || echo 'Sockd not in PATH'"]
-EOF
-
-docker build -t sockd-debug -f debug-dockerfile .
-docker run --rm sockd-debug
-
-# На основе результатов отладки создаем Dockerfile
-echo "Создаем Dockerfile с правильным путем к sockd..."
-cat > Dockerfile << 'EOF'
-FROM ubuntu:20.04
+# Setup configuration files and passwords
+.PHONY: setup
+setup:
+	@echo "Setting up configuration files..."
+	@mkdir -p proxy-server
+	@cd proxy-server && \
+		echo "version: '3.3'\n\
+services:\n\
+  squid:\n\
+    image: ubuntu/squid:latest\n\
+    container_name: squid_proxy\n\
+    ports:\n\
+      - \"$(HTTP_PORT):3128\"\n\
+    volumes:\n\
+      - ./squid.conf:/etc/squid/squid.conf\n\
+      - ./squid.passwd:/etc/squid/passwd\n\
+    environment:\n\
+      - TZ=UTC\n\
+    restart: unless-stopped\n\
+  dante:\n\
+    build:\n\
+      context: .\n\
+      dockerfile: Dockerfile\n\
+    container_name: dante_proxy\n\
+    ports:\n\
+      - \"$(SOCKS_PORT):1080\"\n\
+    environment:\n\
+      - TZ=UTC\n\
+    restart: unless-stopped" > docker-compose.yml
+	@cd proxy-server && \
+		echo "FROM ubuntu:20.04\n\
 RUN apt-get update && \
     apt-get install -y dante-server && \
     apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
-COPY sockd.conf /etc/sockd.conf
-COPY dante.passwd /etc/dante.passwd
-RUN chmod 644 /etc/dante.passwd
-EXPOSE 1080
-# Используем запуск через bash для поиска sockd в разных местах
-CMD ["bash", "-c", "if [ -f /usr/bin/sockd ]; then /usr/bin/sockd -f /etc/sockd.conf; elif [ -f /usr/sbin/sockd ]; then /usr/sbin/sockd -f /etc/sockd.conf; else echo 'sockd не найден!' && find / -name sockd -type f; fi"]
-EOF
+    rm -rf /var/lib/apt/lists/*\n\
+COPY sockd.conf /etc/sockd.conf\n\
+COPY dante.passwd /etc/dante.passwd\n\
+RUN chmod 644 /etc/dante.passwd\n\
+EXPOSE 1080\n\
+# Используем запуск через bash для поиска sockd в разных местах\n\
+CMD [\"bash\", \"-c\", \"if [ -f /usr/bin/sockd ]; then /usr/bin/sockd -f /etc/sockd.conf; elif [ -f /usr/sbin/sockd ]; then /usr/sbin/sockd -f /etc/sockd.conf; else echo 'sockd не найден!' && find / -name sockd -type f; fi\"]" > Dockerfile
+	@cd proxy-server && \
+		echo "auth_param basic program /usr/lib/squid/basic_ncsa_auth /etc/squid/passwd\n\
+auth_param basic realm Proxy Authentication\n\
+acl authenticated proxy_auth REQUIRED\n\
+http_access allow authenticated\n\
+http_access deny all\n\
+http_port 3128" > squid.conf
+	@cd proxy-server && \
+		echo "logoutput: stderr\n\
+internal: 0.0.0.0 port = 1080\n\
+external: eth0\n\
+method: username\n\
+user.privileged: nobody\n\
+user.unprivileged: nobody\n\
+clientmethod: none\n\
+client pass {\n\
+    from: 0.0.0.0/0 to: 0.0.0.0/0\n\
+    log: connect disconnect error iooperation\n\
+}\n\
+socks pass {\n\
+    from: 0.0.0.0/0 to: 0.0.0.0/0\n\
+    command: bind connect udpassociate\n\
+    log: connect disconnect error iooperation\n\
+    protocol: socks5\n\
+}" > sockd.conf
+	@cd proxy-server && htpasswd -bc squid.passwd $(USER) $(PASS)
+	@cd proxy-server && echo "$(USER):$(PASS)" > dante.passwd
+	@cd proxy-server && chmod 644 dante.passwd
 
-# Создаем docker-compose.yml
-cat > docker-compose.yml << 'EOF'
-version: '3.3'
-services:
-  squid:
-    image: ubuntu/squid:latest
-    container_name: squid_proxy
-    ports:
-      - "58601:3128"
-    volumes:
-      - ./squid.conf:/etc/squid/squid.conf
-      - ./squid.passwd:/etc/squid/passwd
-    environment:
-      - TZ=UTC
-    restart: unless-stopped
-    
-  dante:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: dante_proxy
-    ports:
-      - "58602:1080"
-    environment:
-      - TZ=UTC
-    restart: unless-stopped
-EOF
+# Clean Docker environment
+.PHONY: clean-docker
+clean-docker:
+	@echo "Cleaning Docker environment..."
+	@cd proxy-server && docker-compose down --remove-orphans 2>/dev/null || true
+	@docker rm -f dante_proxy squid_proxy 2>/dev/null || true
+	@docker rmi -f proxy-server_dante 2>/dev/null || true
+	@docker system prune -af --volumes --force || true
 
-# Создаем squid.conf
-cat > squid.conf << 'EOF'
-auth_param basic program /usr/lib/squid/basic_ncsa_auth /etc/squid/passwd
-auth_param basic realm Proxy Authentication
-acl authenticated proxy_auth REQUIRED
-http_access allow authenticated
-http_access deny all
-http_port 3128
-EOF
+# Start the services
+.PHONY: start
+start:
+	@echo "Starting proxy services..."
+	@cd proxy-server && docker-compose up -d --build
 
-# Создаем sockd.conf
-cat > sockd.conf << 'EOF'
-logoutput: stderr
-internal: 0.0.0.0 port = 1080
-external: eth0
-method: username
-user.privileged: nobody
-user.unprivileged: nobody
-clientmethod: none
-client pass {
-    from: 0.0.0.0/0 to: 0.0.0.0/0
-    log: connect disconnect error iooperation
-}
-socks pass {
-    from: 0.0.0.0/0 to: 0.0.0.0/0
-    command: bind connect udpassociate
-    log: connect disconnect error iooperation
-    protocol: socks5
-}
-EOF
+# Configure firewall
+.PHONY: firewall
+firewall:
+	@echo "Configuring firewall..."
+	@sudo ufw allow $(HTTP_PORT)
+	@sudo ufw allow $(SOCKS_PORT)
+	@sudo ufw reload
 
-# Создаем пароли
-echo "Создание файлов с паролями..."
-htpasswd -bc squid.passwd proxyuser proxypass
-echo "proxyuser:proxypass" > dante.passwd
-chmod 644 dante.passwd
+# Generate credentials file
+.PHONY: credentials
+credentials:
+	@echo "Generating credentials file..."
+	@echo "http://$(USER):$(PASS)@$(IP):$(HTTP_PORT)" > proxy_credentials.txt
+	@echo "socks5://$(USER):$(PASS)@$(IP):$(SOCKS_PORT)" >> proxy_credentials.txt
+	@echo "Credentials saved to proxy_credentials.txt"
 
-# Конфигурация Firewall
-echo "Настройка Firewall..."
-ufw allow 58601/tcp
-ufw allow 58602/tcp
-ufw reload
+# Clean up
+.PHONY: clean
+clean: clean-docker
+	@echo "Cleaning up..."
+	@sudo ufw delete allow $(HTTP_PORT) || true
+	@sudo ufw delete allow $(SOCKS_PORT) || true
+	@sudo ufw reload
+	@rm -rf proxy-server
+	@rm -f proxy_credentials.txt
 
-# Запуск сервисов
-echo "Запуск прокси-серверов..."
-docker-compose up -d --build
+# Prompt for ports
+.PHONY: prompt
+prompt:
+	$(eval HTTP_PORT := $(shell read -p "Enter HTTP proxy port [3128]: " port && echo $${port:-3128}))
+	$(eval SOCKS_PORT := $(shell read -p "Enter SOCKS5 proxy port [1080]: " port && echo $${port:-1080}))
 
-# Создание файла с учетными данными
-echo "Создание файла с учетными данными..."
-SERVER_IP=$(curl -s ifconfig.me || echo "YOUR_SERVER_IP")
-echo "http://proxyuser:proxypass@$SERVER_IP:58601" > ../proxy_credentials.txt
-echo "socks5://proxyuser:proxypass@$SERVER_IP:58602" >> ../proxy_credentials.txt
-echo "Учетные данные сохранены в proxy_credentials.txt"
-
-cd ..
-echo "Установка завершена!"
+# Full repair of the setup with debug
+.PHONY: repair
+repair: clean find-sockd install setup start firewall credentials
+	@echo "Repair completed. Check if services are running:"
+	@docker ps
