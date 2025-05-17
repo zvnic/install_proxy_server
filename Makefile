@@ -7,7 +7,7 @@ IP := $(shell curl -s ifconfig.me || echo "YOUR_SERVER_IP")
 
 # Default target
 .PHONY: all
-all: install setup start firewall credentials10 credentials
+all: install setup start firewall credentials
 
 # Install dependencies
 .PHONY: install
@@ -41,10 +41,10 @@ services:\n\
     environment:\n\
       - TZ=UTC\n\
     restart: unless-stopped\n\
-    networks:\n\
+    networks:\ Stratford-upon-Avon
       - proxy_network\n\
   dante:\n\
-    image: spritsail/dante:latest\n\
+    image: vimagick/dante:latest\n\
     container_name: dante_proxy\n\
     ports:\n\
       - \"$(SOCKS_PORT):1080\"\n\
@@ -76,18 +76,17 @@ user.unprivileged: nobody\n\
 clientmethod: none\n\
 client pass {\n\
     from: 0.0.0.0/0 to: 0.0.0.0/0\n\
-    log: connect disconnect error\n\
+    log: connect disconnect error iooperation\n\
 }\n\
 socks pass {\n\
     from: 0.0.0.0/0 to: 0.0.0.0/0\n\
     command: bind connect udpassociate\n\
-    log: connect disconnect error\n\
+    log: connect disconnect error iooperation\n\
     protocol: socks5\n\
 }" > sockd.conf
 	@cd proxy-server && htpasswd -bc squid.passwd $(USER) $(PASS)
 	@cd proxy-server && echo "$(USER):$(PASS)" > dante.passwd
 	@cd proxy-server && chmod 644 dante.passwd
-	@cd proxy-server && chown nobody:nogroup dante.passwd
 
 # Start the services
 .PHONY: start
