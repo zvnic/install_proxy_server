@@ -31,119 +31,20 @@ clean-docker:
 	@docker rmi -f proxy-server_dante 2>/dev/null || true
 	@docker system prune -af --volumes --force || true
 
-# Create Dockerfile directly without echo
-.PHONY: create-dockerfile
-create-dockerfile:
-	@mkdir -p proxy-server
-	@cd proxy-server && cat > Dockerfile.dante << 'EOF'
-FROM vimagick/dante
-
-# Установка необходимых пакетов
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-    libpam-pwdfile passwd && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
-
-# Создание пользователя proxyuser с паролем proxypass
-RUN useradd -m -s /bin/bash $(USER) && \
-    echo "$(USER):$(PASS)" | chpasswd
-
-# Экспорт порта
-EXPOSE 1080
-
-CMD ["/usr/sbin/sockd"]
-EOF
-	@sed -i 's/\$$(USER)/$(USER)/g' proxy-server/Dockerfile.dante
-	@sed -i 's/\$$(PASS)/$(PASS)/g' proxy-server/Dockerfile.dante
-
 # Setup configuration files and passwords
 .PHONY: setup
-setup: create-dockerfile
+setup:
 	@echo "Setting up configuration files..."
 	@mkdir -p proxy-server
-	@cd proxy-server && \
-		echo "version: '3.3'\n\
-services:\n\
-  squid:\n\
-    image: ubuntu/squid:latest\n\
-    container_name: squid_proxy\n\
-    ports:\n\
-      - \"$(HTTP_PORT):3128\"\n\
-    volumes:\n\
-      - ./squid.conf:/etc/squid/squid.conf\n\
-      - ./squid.passwd:/etc/squid/passwd\n\
-    environment:\n\
-      - TZ=UTC\n\
-    restart: unless-stopped\n\
-  dante:\n\
-    build:\n\
-      context: .\n\
-      dockerfile: Dockerfile.dante\n\
-    container_name: dante_proxy\n\
-    ports:\n\
-      - \"$(SOCKS_PORT):1080\"\n\
-    volumes:\n\
-      - ./danted.conf:/etc/danted.conf\n\
-    restart: unless-stopped" > docker-compose.yml
-	@cd proxy-server && \
-		echo "auth_param basic program /usr/lib/squid/basic_ncsa_auth /etc/squid/passwd\n\
-auth_param basic realm Proxy Authentication\n\
-acl authenticated proxy_auth REQUIRED\n\
-http_access allow authenticated\n\
-http_access deny all\n\
-http_port 3128" > squid.conf
-	@cd proxy-server && \
-		echo "logoutput: stderr\n\
-internal: 0.0.0.0 port = 1080\n\
-external: eth0\n\
-socksmethod: username\n\
-user.privileged: root\n\
-user.unprivileged: nobody\n\
-client pass {\n\
-    from: 0.0.0.0/0 to: 0.0.0.0/0\n\
-    log: connect disconnect error\n\
-}\n\
-socks pass {\n\
-    from: 0.0.0.0/0 to: 0.0.0.0/0\n\
-    command: bind connect udpassociate\n\
-    log: connect disconnect error\n\
-}" > danted.conf
-	@cd proxy-server && htpasswd -bc squid.passwd $(USER) $(PASS)
-
-# Alternative approach with direct file creation
-.PHONY: alternative-setup
-alternative-setup:
-	@echo "Setting up configuration files (alternative method)..."
-	@mkdir -p proxy-server
-	@cd proxy-server && cat > Dockerfile.dante << 'EOF'
-FROM vimagick/dante
-
-# Установка необходимых пакетов
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-    libpam-pwdfile passwd && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
-
-# Создание пользователя proxyuser с паролем proxypass
-RUN useradd -m -s /bin/bash proxyuser && \
-    echo "proxyuser:proxypass" | chpasswd
-
-# Экспорт порта
-EXPOSE 1080
-
-CMD ["/usr/sbin/sockd"]
-EOF
-
-	@cd proxy-server && cat > docker-compose.yml << 'EOF'
+	@echo "Creating docker-compose.yml..."
+	@cat > proxy-server/docker-compose.yml << EOF
 version: '3.3'
 services:
   squid:
     image: ubuntu/squid:latest
     container_name: squid_proxy
     ports:
-      - "58601:3128"
+      - "$(HTTP_PORT):3128"
     volumes:
       - ./squid.conf:/etc/squid/squid.conf
       - ./squid.passwd:/etc/squid/passwd
@@ -156,13 +57,33 @@ services:
       dockerfile: Dockerfile.dante
     container_name: dante_proxy
     ports:
-      - "58602:1080"
+      - "$(SOCKS_PORT):1080"
     volumes:
       - ./danted.conf:/etc/danted.conf
     restart: unless-stopped
 EOF
+	@echo "Creating Dockerfile.dante..."
+	@cat > proxy-server/Dockerfile.dante << EOF
+FROM vimagick/dante
 
-	@cd proxy-server && cat > squid.conf << 'EOF'
+# Установка необходимых пакетов
+RUN apt-get update && \\
+    apt-get install -y --no-install-recommends \\
+    libpam-pwdfile passwd && \\
+    apt-get clean && \\
+    rm -rf /var/lib/apt/lists/*
+
+# Создание пользователя proxyuser с паролем proxypass
+RUN useradd -m -s /bin/bash $(USER) && \\
+    echo "$(USER):$(PASS)" | chpasswd
+
+# Экспорт порта
+EXPOSE 1080
+
+CMD ["/usr/sbin/sockd"]
+EOF
+	@echo "Creating squid.conf..."
+	@cat > proxy-server/squid.conf << EOF
 auth_param basic program /usr/lib/squid/basic_ncsa_auth /etc/squid/passwd
 auth_param basic realm Proxy Authentication
 acl authenticated proxy_auth REQUIRED
@@ -170,8 +91,8 @@ http_access allow authenticated
 http_access deny all
 http_port 3128
 EOF
-
-	@cd proxy-server && cat > danted.conf << 'EOF'
+	@echo "Creating danted.conf..."
+	@cat > proxy-server/danted.conf << EOF
 logoutput: stderr
 internal: 0.0.0.0 port = 1080
 external: eth0
@@ -244,9 +165,9 @@ prompt:
 	$(eval HTTP_PORT := $(shell read -p "Enter HTTP proxy port [3128]: " port && echo $${port:-3128}))
 	$(eval SOCKS_PORT := $(shell read -p "Enter SOCKS5 proxy port [1080]: " port && echo $${port:-1080}))
 
-# Alternative repair that uses direct file creation
+# Full repair of the setup with check
 .PHONY: repair
-repair: clean install alternative-setup start firewall credentials
+repair: clean install setup start firewall credentials
 	@echo "Repair completed. Checking if services are running..."
 	@sleep 3  # Даём время контейнерам запуститься
 	@make status
