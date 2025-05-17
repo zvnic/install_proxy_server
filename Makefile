@@ -66,15 +66,14 @@ services:\n\
 # Установка необходимых пакетов\n\
 RUN apt-get update && \\\n\
     apt-get install -y --no-install-recommends \\\n\
-    libpam-pwdfile passwd \\\n\
-    && apt-get clean \\\n\
-    && rm -rf /var/lib/apt/lists/*\n\
+    libpam-pwdfile passwd && \\\n\
+    apt-get clean && \\\n\
+    rm -rf /var/lib/apt/lists/*\n\
 \n\
 # Создание пользователя proxyuser с паролем proxypass\n\
 RUN useradd -m -s /bin/bash $(USER) && \\\n\
     echo \"$(USER):$(PASS)\" | chpasswd\n\
 \n\
-# Экспорт порта\n\
 EXPOSE 1080\n\
 \n\
 CMD [\"/usr/sbin/sockd\"]" > Dockerfile.dante
