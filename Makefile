@@ -68,7 +68,7 @@ COPY sockd.conf /etc/sockd.conf\n\
 COPY dante.passwd /etc/dante.passwd\n\
 RUN chmod 644 /etc/dante.passwd\n\
 EXPOSE 1080\n\
-CMD [\"sockd\"]" > Dockerfile
+CMD [\"/usr/sbin/sockd\", \"-f\", \"/etc/sockd.conf\"]" > Dockerfile
 	@cd proxy-server && \
 		echo "auth_param basic program /usr/lib/squid/basic_ncsa_auth /etc/squid/passwd\n\
 auth_param basic realm Proxy Authentication\n\
