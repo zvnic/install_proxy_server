@@ -51,13 +51,33 @@ services:\n\
       - TZ=UTC\n\
     restart: unless-stopped\n\
   dante:\n\
-    image: vimagick/dante\n\
+    build:\n\
+      context: .\n\
+      dockerfile: Dockerfile.dante\n\
     container_name: dante_proxy\n\
     ports:\n\
       - \"$(SOCKS_PORT):1080\"\n\
     volumes:\n\
       - ./danted.conf:/etc/danted.conf\n\
     restart: unless-stopped" > docker-compose.yml
+	@cd proxy-server && \
+		echo "FROM vimagick/dante\n\
+\n\
+# Установка необходимых пакетов\n\
+RUN apt-get update && \\\n\
+    apt-get install -y --no-install-recommends \\\n\
+    libpam-pwdfile passwd \\\n\
+    && apt-get clean \\\n\
+    && rm -rf /var/lib/apt/lists/*\n\
+\n\
+# Создание пользователя proxyuser с паролем proxypass\n\
+RUN useradd -m -s /bin/bash $(USER) && \\\n\
+    echo \"$(USER):$(PASS)\" | chpasswd\n\
+\n\
+# Экспорт порта\n\
+EXPOSE 1080\n\
+\n\
+CMD [\"/usr/sbin/sockd\"]" > Dockerfile.dante
 	@cd proxy-server && \
 		echo "auth_param basic program /usr/lib/squid/basic_ncsa_auth /etc/squid/passwd\n\
 auth_param basic realm Proxy Authentication\n\
@@ -69,10 +89,9 @@ http_port 3128" > squid.conf
 		echo "logoutput: stderr\n\
 internal: 0.0.0.0 port = 1080\n\
 external: eth0\n\
-socksmethod: username none\n\
+socksmethod: username\n\
 user.privileged: root\n\
 user.unprivileged: nobody\n\
-user.libwrap: nobody\n\
 client pass {\n\
     from: 0.0.0.0/0 to: 0.0.0.0/0\n\
     log: connect disconnect error\n\
@@ -88,7 +107,7 @@ socks pass {\n\
 .PHONY: start
 start:
 	@echo "Starting proxy services..."
-	@cd proxy-server && docker-compose up -d
+	@cd proxy-server && docker-compose up -d --build
 
 # Configure firewall
 .PHONY: firewall
@@ -103,7 +122,7 @@ firewall:
 credentials:
 	@echo "Generating credentials file..."
 	@echo "http://$(USER):$(PASS)@$(IP):$(HTTP_PORT)" > proxy_credentials.txt
-	@echo "socks5://$(IP):$(SOCKS_PORT)" >> proxy_credentials.txt
+	@echo "socks5://$(USER):$(PASS)@$(IP):$(SOCKS_PORT)" >> proxy_credentials.txt
 	@echo "Credentials saved to proxy_credentials.txt"
 
 # Check proxy status
@@ -120,7 +139,7 @@ status:
 	@echo "HTTP proxy: "
 	@curl -s --max-time 5 --proxy http://$(USER):$(PASS)@localhost:$(HTTP_PORT) https://api.ipify.org || echo "Failed to connect to HTTP proxy"
 	@echo "\nSOCKS proxy: "
-	@curl -s --max-time 5 --socks5-hostname localhost:$(SOCKS_PORT) https://api.ipify.org || echo "Failed to connect to SOCKS proxy"
+	@curl -s --max-time 5 --socks5-hostname socks5://$(USER):$(PASS)@localhost:$(SOCKS_PORT) https://api.ipify.org || echo "Failed to connect to SOCKS proxy"
 
 # Clean up
 .PHONY: clean
