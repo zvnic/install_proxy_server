@@ -7,7 +7,7 @@ IP := $(shell curl -s ifconfig.me || echo "YOUR_SERVER_IP")
 
 # Default target
 .PHONY: all
-all: install setup start firewall credentials
+all: install setup start firewall credentials10 credentials
 
 # Install dependencies
 .PHONY: install
@@ -44,17 +44,15 @@ services:\n\
     networks:\n\
       - proxy_network\n\
   dante:\n\
-    image: ghcr.io/linuxserver/dante:latest\n\
+    image: spritsail/dante:latest\n\
     container_name: dante_proxy\n\
     ports:\n\
       - \"$(SOCKS_PORT):1080\"\n\
     volumes:\n\
-      - ./sockd.conf:/config/sockd.conf\n\
-      - ./dante.passwd:/config/dante.passwd\n\
+      - ./sockd.conf:/etc/sockd.conf\n\
+      - ./dante.passwd:/etc/dante.passwd\n\
     environment:\n\
       - TZ=UTC\n\
-      - PUID=1000\n\
-      - PGID=1000\n\
     restart: unless-stopped\n\
     networks:\n\
       - proxy_network\n\
@@ -73,23 +71,23 @@ http_port 3128" > squid.conf
 internal: 0.0.0.0 port = 1080\n\
 external: eth0\n\
 method: username\n\
-user.privileged: root\n\
+user.privileged: nobody\n\
 user.unprivileged: nobody\n\
 clientmethod: none\n\
 client pass {\n\
     from: 0.0.0.0/0 to: 0.0.0.0/0\n\
-    log: connect disconnect\n\
+    log: connect disconnect error\n\
 }\n\
 socks pass {\n\
     from: 0.0.0.0/0 to: 0.0.0.0/0\n\
     command: bind connect udpassociate\n\
-    log: connect disconnect\n\
+    log: connect disconnect error\n\
     protocol: socks5\n\
 }" > sockd.conf
 	@cd proxy-server && htpasswd -bc squid.passwd $(USER) $(PASS)
 	@cd proxy-server && echo "$(USER):$(PASS)" > dante.passwd
 	@cd proxy-server && chmod 644 dante.passwd
-	@cd proxy-server && chown 1000:1000 dante.passwd
+	@cd proxy-server && chown nobody:nogroup dante.passwd
 
 # Start the services
 .PHONY: start
@@ -114,7 +112,6 @@ credentials:
 	@echo "Credentials saved to proxy_credentials.txt"
 
 # Clean up
-:# Clean up
 .PHONY: clean
 clean:
 	@echo "Cleaning up..."
