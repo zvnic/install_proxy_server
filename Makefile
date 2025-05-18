@@ -85,8 +85,7 @@ create-configs:
 	@echo '      /bin/sh -c "' >> proxy-server/docker-compose.yml
 	@echo '        sed \"s/^http_port .*/http_port $${HTTP_PORT:-3128}/\" /etc/squid/squid.conf > /tmp/squid.conf &&' >> proxy-server/docker-compose.yml
 	@echo '        mv /tmp/squid.conf /etc/squid/squid.conf &&' >> proxy-server/docker-compose.yml
-	@echo '        squid -f /etc/squid/squid.conf -NY' >> proxy-server/docker-compose.yml
-	@echo '      "' >> proxy-server/docker-compose.yml
+	@echo '        squid -N -f /etc/squid/squid.conf"' >> proxy-server/docker-compose.yml
 	@echo '    healthcheck:' >> proxy-server/docker-compose.yml
 	@echo '      test: ["CMD", "squidclient", "-h", "localhost", "cache_object://localhost/counters"]' >> proxy-server/docker-compose.yml
 	@echo '      interval: 30s' >> proxy-server/docker-compose.yml
@@ -112,9 +111,8 @@ create-configs:
 	@echo '    command: >' >> proxy-server/docker-compose.yml
 	@echo '      /bin/sh -c "' >> proxy-server/docker-compose.yml
 	@echo '        sed \"s/port = .*/port = $${SOCKS_PORT:-1080}/\" /etc/sockd.conf > /tmp/sockd.conf &&' >> proxy-server/docker-compose.yml
-	@echo '        mv /tmp/sockd.conf /etc/sockd.conf &&' >> proxy-server/docker-compose.yml
-	@echo '        sockd -f /etc/sockd.conf' >> proxy-server/docker-compose.yml
-	@echo '      "' >> proxy-server/docker-compose.yml
+	@echo '        cat /tmp/sockd.conf > /etc/sockd.conf &&' >> proxy-server/docker-compose.yml
+	@echo '        sockd -f /etc/sockd.conf"' >> proxy-server/docker-compose.yml
 	@echo '    healthcheck:' >> proxy-server/docker-compose.yml
 	@echo '      test: ["CMD", "nc", "-z", "localhost", "1080"]' >> proxy-server/docker-compose.yml
 	@echo '      interval: 30s' >> proxy-server/docker-compose.yml
@@ -156,6 +154,8 @@ create-configs:
 	@echo '    socksmethod: username' >> proxy-server/sockd.conf
 	@echo '}' >> proxy-server/sockd.conf
 	@chmod 777 proxy-server/cache
+	@chmod 644 proxy-server/squid.conf
+	@chmod 644 proxy-server/sockd.conf
 	@echo "$(GREEN)Конфигурационные файлы созданы$(NC)"
 
 # Setup configuration files and passwords
