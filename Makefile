@@ -57,37 +57,37 @@ setup: config create-users
 	@echo "Setting up configuration files..."
 	@mkdir -p proxy-server
 	@cd proxy-server && \
-		echo 'version: "3.8"\n\
-services:\n\
-  squid:\n\
-    image: ubuntu/squid:latest\n\
-    container_name: squid_proxy\n\
-    ports:\n\
-      - "$(HTTP_PORT):3128"\n\
-    volumes:\n\
-      - ./squid.conf:/etc/squid/squid.conf\n\
-      - ./credentials/squid.passwd:/etc/squid/passwd:ro\n\
-    environment:\n\
-      - TZ=UTC\n\
-    restart: unless-stopped\n\
-    networks:\n\
-      - proxy_network\n\
-  dante:\n\
-    image: vimagick/dante:latest\n\
-    container_name: dante_proxy\n\
-    ports:\n\
-      - "$(SOCKS_PORT):1080"\n\
-    volumes:\n\
-      - ./sockd.conf:/etc/sockd.conf\n\
-      - ./credentials/dante.passwd:/etc/dante.passwd:ro\n\
-    environment:\n\
-      - TZ=UTC\n\
-    restart: unless-stopped\n\
-    networks:\n\
-      - proxy_network\n\
-networks:\n\
-  proxy_network:\n\
-    driver: bridge' > docker-compose.yml
+		echo 'version: "3.8"' > docker-compose.yml && \
+		echo 'services:' >> docker-compose.yml && \
+		echo '  squid:' >> docker-compose.yml && \
+		echo '    image: ubuntu/squid:latest' >> docker-compose.yml && \
+		echo '    container_name: squid_proxy' >> docker-compose.yml && \
+		echo '    ports:' >> docker-compose.yml && \
+		echo '      - "$(HTTP_PORT):3128"' >> docker-compose.yml && \
+		echo '    volumes:' >> docker-compose.yml && \
+		echo '      - ./squid.conf:/etc/squid/squid.conf' >> docker-compose.yml && \
+		echo '      - ./credentials/squid.passwd:/etc/squid/passwd:ro' >> docker-compose.yml && \
+		echo '    environment:' >> docker-compose.yml && \
+		echo '      - TZ=UTC' >> docker-compose.yml && \
+		echo '    restart: unless-stopped' >> docker-compose.yml && \
+		echo '    networks:' >> docker-compose.yml && \
+		echo '      - proxy_network' >> docker-compose.yml && \
+		echo '  dante:' >> docker-compose.yml && \
+		echo '    image: vimagick/dante:latest' >> docker-compose.yml && \
+		echo '    container_name: dante_proxy' >> docker-compose.yml && \
+		echo '    ports:' >> docker-compose.yml && \
+		echo '      - "$(SOCKS_PORT):1080"' >> docker-compose.yml && \
+		echo '    volumes:' >> docker-compose.yml && \
+		echo '      - ./sockd.conf:/etc/sockd.conf' >> docker-compose.yml && \
+		echo '      - ./credentials/dante.passwd:/etc/dante.passwd:ro' >> docker-compose.yml && \
+		echo '    environment:' >> docker-compose.yml && \
+		echo '      - TZ=UTC' >> docker-compose.yml && \
+		echo '    restart: unless-stopped' >> docker-compose.yml && \
+		echo '    networks:' >> docker-compose.yml && \
+		echo '      - proxy_network' >> docker-compose.yml && \
+		echo 'networks:' >> docker-compose.yml && \
+		echo '  proxy_network:' >> docker-compose.yml && \
+		echo '    driver: bridge' >> docker-compose.yml
 	@cd proxy-server && \
 		echo "auth_param basic program /usr/lib/squid/basic_ncsa_auth /etc/squid/passwd\n\
 auth_param basic realm Proxy Authentication\n\
