@@ -16,6 +16,11 @@ services:
     restart: unless-stopped
     networks:
       - proxy_network
+    command: >
+      /bin/sh -c "
+        sed -i 's/^http_port .*/http_port ${HTTP_PORT:-3128}/' /etc/squid/squid.conf &&
+        squid -f /etc/squid/squid.conf -NYC
+      "
     healthcheck:
       test: ["CMD", "squidclient", "-h", "localhost", "cache_object://localhost/counters"]
       interval: 30s
@@ -38,6 +43,11 @@ services:
     restart: unless-stopped
     networks:
       - proxy_network
+    command: >
+      /bin/sh -c "
+        sed -i 's/port = .*/port = ${SOCKS_PORT:-1080}/' /etc/sockd.conf &&
+        sockd -f /etc/sockd.conf
+      "
     healthcheck:
       test: ["CMD", "nc", "-z", "localhost", "1080"]
       interval: 30s
