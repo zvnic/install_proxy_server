@@ -57,7 +57,7 @@ services:\n\
       - \"$(HTTP_PORT):3128\"\n\
     volumes:\n\
       - ./squid.conf:/etc/squid/squid.conf\n\
-      - ./credentials/squid.passwd:/etc/squid/passwd\n\
+      - ./credentials/squid.passwd:/etc/squid/passwd:ro\n\
     environment:\n\
       - TZ=UTC\n\
     restart: unless-stopped\n\
@@ -70,7 +70,7 @@ services:\n\
       - \"$(SOCKS_PORT):1080\"\n\
     volumes:\n\
       - ./sockd.conf:/etc/sockd.conf\n\
-      - ./credentials/dante.passwd:/etc/dante.passwd\n\
+      - ./credentials/dante.passwd:/etc/dante.passwd:ro\n\
     environment:\n\
       - TZ=UTC\n\
     restart: unless-stopped\n\
@@ -85,7 +85,10 @@ auth_param basic realm Proxy Authentication\n\
 acl authenticated proxy_auth REQUIRED\n\
 http_access allow authenticated\n\
 http_access deny all\n\
-http_port 3128" > squid.conf
+http_port 3128\n\
+cache_mem 256 MB\n\
+maximum_object_size 1024 MB\n\
+cache_dir ufs /var/cache/squid 100 16 256" > squid.conf
 	@cd proxy-server && \
 		echo "logoutput: stderr\n\
 internal: 0.0.0.0 port = 1080\n\
@@ -102,6 +105,7 @@ socks pass {\n\
     from: 0.0.0.0/0 to: 0.0.0.0/0\n\
     command: bind connect udpassociate\n\
     log: connect disconnect\n\
+    user: authenticated\n\
 }" > sockd.conf
 	@cd proxy-server && docker-compose up -d
 	@echo "http://$(USER):$(PASS)@localhost:$(HTTP_PORT)" > proxy_credentials.txt
@@ -114,7 +118,8 @@ create-users:
 	@mkdir -p proxy-server/credentials
 	@htpasswd -bc proxy-server/credentials/squid.passwd $(USER) $(PASS)
 	@echo "$(USER):$(PASS)" > proxy-server/credentials/dante.passwd
-	@chmod 600 proxy-server/credentials/*.passwd
+	@chmod 644 proxy-server/credentials/*.passwd
+	@chown 31:31 proxy-server/credentials/squid.passwd  # 31 - это UID пользователя squid в контейнере
 
 # Clean up
 .PHONY: clean
