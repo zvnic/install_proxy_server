@@ -1,0 +1,70 @@
+# Docker
+.docker/
+docker-compose.override.yml
+
+# Credentials and sensitive data
+proxy-server/credentials/
+proxy_credentials.txt
+*.passwd
+
+# Logs
+*.log
+logs/
+proxy-server/squid/logs/
+proxy-server/dante/logs/
+
+# Cache
+proxy-server/squid/cache/
+.cache/
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environment
+.venv/
+venv/
+ENV/
+
+# Temporary files
+*.tmp
+*.temp
+.coverage
+htmlcov/
+.pytest_cache/
+.tox/
+.nox/ 
