@@ -27,5 +27,10 @@ socks pass {
 }
 EOF
 
+# Проверяем наличие danted
+which danted
+ls -l /usr/local/sbin/danted
+ls -l /usr/sbin/danted
+
 # Запускаем Dante
-exec /usr/sbin/danted -f /etc/danted.conf
+exec /usr/local/sbin/danted -f /etc/danted.conf

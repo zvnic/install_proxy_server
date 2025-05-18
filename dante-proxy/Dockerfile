@@ -9,7 +9,9 @@ COPY danted.conf.template /app/
 RUN chmod +x /app/entrypoint.sh && \
     chown root:root /app/entrypoint.sh && \
     mkdir -p /var/run/danted && \
-    chown nobody:nobody /var/run/danted
+    chown nobody:nobody /var/run/danted && \
+    find / -name danted -type f 2>/dev/null && \
+    ln -sf /usr/local/sbin/danted /usr/sbin/danted
 
 EXPOSE 1080
 
