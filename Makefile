@@ -57,15 +57,117 @@ create-users:
 	@chmod 600 proxy-server/credentials/dante.passwd
 	@echo "$(GREEN)Учетные данные созданы$(NC)"
 
-# Setup configuration files and passwords
-.PHONY: setup
-setup: config create-users
-	@echo "$(GREEN)Настройка конфигурационных файлов...$(NC)"
+# Create configuration files
+.PHONY: create-configs
+create-configs:
+	@echo "$(GREEN)Создание конфигурационных файлов...$(NC)"
 	@mkdir -p proxy-server/cache
 	@mkdir -p proxy-server/credentials
-	@touch proxy-server/squid.conf
-	@touch proxy-server/sockd.conf
+	@cat > proxy-server/docker-compose.yml << 'EOF'
+version: "3.8"
+
+services:
+  squid:
+    image: ubuntu/squid:latest
+    container_name: squid_proxy
+    ports:
+      - "${HTTP_PORT:-3128}:3128"
+    volumes:
+      - ./squid.conf:/etc/squid/squid.conf
+      - ./credentials/squid.passwd:/etc/squid/passwd:ro
+      - ./cache:/var/cache/squid
+    environment:
+      - TZ=UTC
+      - HTTP_PORT=${HTTP_PORT:-3128}
+    restart: unless-stopped
+    networks:
+      - proxy_network
+    command: >
+      /bin/sh -c "
+        sed 's/^http_port .*/http_port ${HTTP_PORT:-3128}/' /etc/squid/squid.conf > /tmp/squid.conf &&
+        mv /tmp/squid.conf /etc/squid/squid.conf &&
+        squid -f /etc/squid/squid.conf -NY
+      "
+    healthcheck:
+      test: ["CMD", "squidclient", "-h", "localhost", "cache_object://localhost/counters"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    env_file:
+      - ../.env
+
+  dante:
+    image: vimagick/dante:latest
+    container_name: dante_proxy
+    ports:
+      - "${SOCKS_PORT:-1080}:1080"
+    volumes:
+      - ./sockd.conf:/etc/sockd.conf
+      - ./credentials/dante.passwd:/etc/dante.passwd:ro
+    environment:
+      - TZ=UTC
+      - SOCKS_PORT=${SOCKS_PORT:-1080}
+    restart: unless-stopped
+    networks:
+      - proxy_network
+    command: >
+      /bin/sh -c "
+        sed 's/port = .*/port = ${SOCKS_PORT:-1080}/' /etc/sockd.conf > /tmp/sockd.conf &&
+        mv /tmp/sockd.conf /etc/sockd.conf &&
+        sockd -f /etc/sockd.conf
+      "
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "1080"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    env_file:
+      - ../.env
+
+networks:
+  proxy_network:
+    driver: bridge
+EOF
+	@cat > proxy-server/squid.conf << 'EOF'
+http_port 3128
+auth_param basic program /usr/lib/squid/basic_ncsa_auth /etc/squid/passwd
+auth_param basic realm Proxy Authentication
+acl authenticated proxy_auth REQUIRED
+http_access allow authenticated
+http_access deny all
+cache_mem 256 MB
+maximum_object_size 1024 MB
+cache_dir ufs /var/cache/squid 100 16 256
+coredump_dir /var/cache/squid
+access_log /var/log/squid/access.log
+cache_log /var/log/squid/cache.log
+pid_filename /run/squid.pid
+EOF
+	@cat > proxy-server/sockd.conf << 'EOF'
+logoutput: stderr
+internal: 0.0.0.0 port = 1080
+external: eth0
+socksmethod: username
+user.privileged: root
+user.notprivileged: nobody
+client pass {
+    from: 0.0.0.0/0 to: 0.0.0.0/0
+    log: error connect disconnect
+}
+socks pass {
+    from: 0.0.0.0/0 to: 0.0.0.0/0
+    command: bind connect udpassociate
+    log: error connect disconnect
+    socksmethod: username
+}
+EOF
 	@chmod 777 proxy-server/cache
+	@echo "$(GREEN)Конфигурационные файлы созданы$(NC)"
+
+# Setup configuration files and passwords
+.PHONY: setup
+setup: config create-users create-configs
+	@echo "$(GREEN)Запуск прокси-серверов...$(NC)"
 	@docker-compose -f proxy-server/docker-compose.yml up -d
 	@echo "$(GREEN)Прокси-серверы запущены$(NC)"
 
