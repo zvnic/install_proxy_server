@@ -8,9 +8,6 @@ services:
     container_name: dante_proxy
     ports:
       - "${SOCKS_PORT:-1080}:1080"
-    volumes:
-      - ./danted.conf.template:/etc/danted.conf.template
-      - ./entrypoint.sh:/entrypoint.sh
     environment:
       - TZ=UTC
       - SOCKS_PORT=${SOCKS_PORT:-1080}
@@ -19,7 +16,6 @@ services:
     restart: unless-stopped
     networks:
       - proxy_network
-    command: /entrypoint.sh
 
 networks:
   proxy_network:
