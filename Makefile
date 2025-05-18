@@ -1,138 +1,136 @@
-# Makefile для настройки прокси-серверов
+# Variables
+USER ?= proxyuser
+PASS ?= proxypass
+HTTP_PORT ?= 3128
+SOCKS_PORT ?= 1080
+IP := $(shell curl -s ifconfig.me || echo "YOUR_SERVER_IP")
 
-# Переменные
-USER = proxyuser
-PASS = proxypass
-HTTP_PORT = 58601
-SOCKS_PORT = 58602
+# Default target
+.PHONY: all
+all: setup
 
-# Основная цель
-all: clean install setup start firewall credentials
-
-# Установка зависимостей
+# Install dependencies
+.PHONY: install
 install:
-	@echo "Установка зависимостей..."
-	@command -v docker >/dev/null 2>&1 || sudo apt install -y docker.io
+	@echo "Checking and installing dependencies..."
+	@command -v docker >/dev/null 2>&1 || { sudo apt update; sudo apt install -y docker.io; }
 	@command -v docker-compose >/dev/null 2>&1 || sudo apt install -y docker-compose
 	@command -v htpasswd >/dev/null 2>&1 || sudo apt install -y apache2-utils
 	@command -v curl >/dev/null 2>&1 || sudo apt install -y curl
 	@command -v ufw >/dev/null 2>&1 || sudo apt install -y ufw
+	@sudo systemctl enable docker
+	@sudo systemctl start docker
+	@sudo ufw --force enable
 
-# Очистка окружения Docker
-clean:
-	@echo "Очистка..."
-	-@cd proxy-server && docker-compose down --remove-orphans 2>/dev/null || true
-	-@docker rm -f dante_proxy squid_proxy 2>/dev/null || true
-	-@docker rmi -f proxy-server_dante 2>/dev/null || true
-	-@docker system prune -af --volumes --force || true
-	-@rm -rf proxy-server
-	-@rm -f proxy_credentials.txt
-
-# Создание конфигурационных файлов
-setup:
-	@echo "Настройка конфигурационных файлов..."
+# Setup configuration files and passwords
+.PHONY: setup
+setup: create-users
+	@echo "Setting up configuration files..."
 	@mkdir -p proxy-server
-	@bash -c 'cat > proxy-server/docker-compose.yml << EOF
-version: "3.3"
-services:
-  squid:
-    image: ubuntu/squid:latest
-    container_name: squid_proxy
-    ports:
-      - "${HTTP_PORT}:3128"
-    volumes:
-      - ./squid.conf:/etc/squid/squid.conf
-      - ./squid.passwd:/etc/squid/passwd
-    restart: unless-stopped
-  dante:
-    build:
-      context: .
-      dockerfile: Dockerfile.dante
-    container_name: dante_proxy
-    ports:
-      - "${SOCKS_PORT}:1080"
-    volumes:
-      - ./danted.conf:/etc/danted.conf
-    restart: unless-stopped
-EOF'
-	@bash -c 'cat > proxy-server/Dockerfile.dante << EOF
-FROM vimagick/dante
+	@cd proxy-server && \
+		echo "version: '3.8'\n\
+services:\n\
+  squid:\n\
+    image: ubuntu/squid:latest\n\
+    container_name: squid_proxy\n\
+    ports:\n\
+      - \"$(HTTP_PORT):3128\"\n\
+    volumes:\n\
+      - ./squid.conf:/etc/squid/squid.conf\n\
+      - ./squid.passwd:/etc/squid/passwd\n\
+    environment:\n\
+      - TZ=UTC\n\
+    restart: unless-stopped\n\
+    networks:\n\
+      - proxy_network\n\
+  dante:\n\
+    image: vimagick/dante:latest\n\
+    container_name: dante_proxy\n\
+    ports:\n\
+      - \"$(SOCKS_PORT):1080\"\n\
+    volumes:\n\
+      - ./sockd.conf:/etc/sockd.conf\n\
+      - ./dante.passwd:/etc/dante.passwd\n\
+    environment:\n\
+      - TZ=UTC\n\
+    restart: unless-stopped\n\
+    networks:\n\
+      - proxy_network\n\
+networks:\n\
+  proxy_network:\n\
+    driver: bridge" > docker-compose.yml
+	@cd proxy-server && \
+		echo "auth_param basic program /usr/lib/squid/basic_ncsa_auth /etc/squid/passwd\n\
+auth_param basic realm Proxy Authentication\n\
+acl authenticated proxy_auth REQUIRED\n\
+http_access allow authenticated\n\
+http_access deny all\n\
+http_port 3128" > squid.conf
+	@cd proxy-server && \
+		echo "logoutput: stderr\n\
+internal: 0.0.0.0 port = 1080\n\
+external: eth0\n\
+method: username\n\
+user.privileged: root\n\
+user.unprivileged: nobody\n\
+clientmethod: none\n\
+client pass {\n\
+    from: 0.0.0.0/0 to: 0.0.0.0/0\n\
+    log: connect disconnect\n\
+}\n\
+socks pass {\n\
+    from: 0.0.0.0/0 to: 0.0.0.0/0\n\
+    command: bind connect udpassociate\n\
+    log: connect disconnect\n\
+}" > sockd.conf
+	@cd proxy-server && docker-compose up -d
+	@echo "http://$(USER):$(PASS)@localhost:$(HTTP_PORT)" > proxy_credentials.txt
+	@echo "socks5://$(USER):$(PASS)@localhost:$(SOCKS_PORT)" >> proxy_credentials.txt
+	@echo "Прокси-серверы запущены. Данные для доступа сохранены в proxy_credentials.txt"
 
-# Установка необходимых пакетов
-RUN apt-get update && \\
-    apt-get install -y --no-install-recommends \\
-    libpam-pwdfile passwd && \\
-    apt-get clean && \\
-    rm -rf /var/lib/apt/lists/*
+# Create users
+.PHONY: create-users
+create-users:
+	@mkdir -p proxy-server/credentials
+	@htpasswd -bc proxy-server/credentials/squid.passwd $(USER) $(PASS)
+	@echo "$(USER):$(PASS)" > proxy-server/credentials/dante.passwd
+	@chmod 600 proxy-server/credentials/*.passwd
 
-# Создание пользователя
-RUN useradd -m -s /bin/bash ${USER} && \\
-    echo "${USER}:${PASS}" | chpasswd
+# Clean up
+.PHONY: clean
+clean:
+	@echo "Cleaning up..."
+	@cd proxy-server && docker-compose down || true
+	@sudo ufw delete allow $(HTTP_PORT) || true
+	@sudo ufw delete allow $(SOCKS_PORT) || true
+	@sudo ufw reload
+	@rm -rf proxy-server
+	@rm -f proxy_credentials.txt
+	@echo "Прокси-серверы остановлены и конфигурации удалены"
 
-EXPOSE 1080
+# Check status
+.PHONY: check
+check:
+	@echo "Проверка статуса контейнеров:"
+	@cd proxy-server && docker-compose ps
+	@echo "\nПроверка HTTP прокси:"
+	@curl -x http://$(USER):$(PASS)@localhost:$(HTTP_PORT) http://example.com -I
+	@echo "\nПроверка SOCKS5 прокси:"
+	@curl --socks5-hostname socks5://$(USER):$(PASS)@localhost:$(SOCKS_PORT) http://example.com -I
 
-CMD ["/usr/sbin/sockd"]
-EOF'
-	@bash -c 'cat > proxy-server/squid.conf << EOF
-auth_param basic program /usr/lib/squid/basic_ncsa_auth /etc/squid/passwd
-auth_param basic realm Proxy Authentication
-acl authenticated proxy_auth REQUIRED
-http_access allow authenticated
-http_access deny all
-http_port 3128
-EOF'
-	@bash -c 'cat > proxy-server/danted.conf << EOF
-logoutput: stderr
-internal: 0.0.0.0 port = 1080
-external: eth0
-socksmethod: username
-user.privileged: root
-user.unprivileged: nobody
-client pass {
-    from: 0.0.0.0/0 to: 0.0.0.0/0
-    log: connect disconnect error
-}
-socks pass {
-    from: 0.0.0.0/0 to: 0.0.0.0/0
-    command: bind connect udpassociate
-    log: connect disconnect error
-}
-EOF'
-	@cd proxy-server && htpasswd -bc squid.passwd $(USER) $(PASS)
+# Logs
+.PHONY: logs
+logs:
+	@cd proxy-server && docker-compose logs -f
 
-# Запуск сервисов
-start:
-	@echo "Запуск прокси-серверов..."
-	@cd proxy-server && docker-compose up -d --build
+# Restart
+.PHONY: restart
+restart:
+	@cd proxy-server && docker-compose restart
+	@echo "Прокси-серверы перезапущены"
 
-# Настройка брандмауэра
-firewall:
-	@echo "Настройка брандмауэра..."
-	-@sudo ufw allow $(HTTP_PORT) || true
-	-@sudo ufw allow $(SOCKS_PORT) || true
-	-@sudo ufw reload || true
-
-# Создание файла с учётными данными
-credentials:
-	@echo "Создание файла с учётными данными..."
-	@IP=$$(curl -s ifconfig.me); \
-	echo "http://$(USER):$(PASS)@$$IP:$(HTTP_PORT)" > proxy_credentials.txt; \
-	echo "socks5://$(USER):$(PASS)@$$IP:$(SOCKS_PORT)" >> proxy_credentials.txt; \
-	echo "Учётные данные сохранены в proxy_credentials.txt"
-
-# Проверка статуса
-status:
-	@echo "Проверка статуса прокси-серверов..."
-	@docker ps | grep -E "squid_proxy|dante_proxy" || echo "Прокси-серверы не запущены"
-	@echo "\nЛоги Squid:"
-	@docker logs squid_proxy 2>&1 | tail -n 5 || true
-	@echo "\nЛоги Dante:"
-	@docker logs dante_proxy 2>&1 | tail -n 5 || true
-
-# Запрос портов - упрощенная версия
+# Prompt for ports
+.PHONY: prompt
 prompt:
-	@echo "Используем порты: HTTP=${HTTP_PORT}, SOCKS=${SOCKS_PORT}"
-	@echo "Если хотите изменить, отредактируйте Makefile"
-
-# Полное восстановление
-repair: clean install setup start firewall credentials status
+	$(eval HTTP_PORT := $(shell read -p "Enter HTTP proxy port [3128]: " port && echo $${port:-3128}))
+	$(eval SOCKS_PORT := $(shell read -p "Enter SOCKS5 proxy port [1080]: " port && echo $${port:-1080}))
