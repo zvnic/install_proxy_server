@@ -70,7 +70,7 @@ create-configs:
 	@echo '    image: ubuntu/squid:latest' >> proxy-server/docker-compose.yml
 	@echo '    container_name: squid_proxy' >> proxy-server/docker-compose.yml
 	@echo '    ports:' >> proxy-server/docker-compose.yml
-	@echo '      - "$${HTTP_PORT:-3128}:3128"' >> proxy-server/docker-compose.yml
+	@echo '      - "$${HTTP_PORT:-3128}:$${HTTP_PORT:-3128}"' >> proxy-server/docker-compose.yml
 	@echo '    volumes:' >> proxy-server/docker-compose.yml
 	@echo '      - ./squid.conf:/etc/squid/squid.conf' >> proxy-server/docker-compose.yml
 	@echo '      - ./credentials/squid.passwd:/etc/squid/passwd:ro' >> proxy-server/docker-compose.yml
@@ -83,8 +83,19 @@ create-configs:
 	@echo '      - proxy_network' >> proxy-server/docker-compose.yml
 	@echo '    command: >' >> proxy-server/docker-compose.yml
 	@echo '      /bin/sh -c "' >> proxy-server/docker-compose.yml
-	@echo '        sed \"s/^http_port .*/http_port $${HTTP_PORT:-3128}/\" /etc/squid/squid.conf > /tmp/squid.conf &&' >> proxy-server/docker-compose.yml
-	@echo '        mv /tmp/squid.conf /etc/squid/squid.conf &&' >> proxy-server/docker-compose.yml
+	@echo '        echo \"http_port $${HTTP_PORT:-3128}\" > /etc/squid/squid.conf &&' >> proxy-server/docker-compose.yml
+	@echo '        echo \"auth_param basic program /usr/lib/squid/basic_ncsa_auth /etc/squid/passwd\" >> /etc/squid/squid.conf &&' >> proxy-server/docker-compose.yml
+	@echo '        echo \"auth_param basic realm Proxy Authentication\" >> /etc/squid/squid.conf &&' >> proxy-server/docker-compose.yml
+	@echo '        echo \"acl authenticated proxy_auth REQUIRED\" >> /etc/squid/squid.conf &&' >> proxy-server/docker-compose.yml
+	@echo '        echo \"http_access allow authenticated\" >> /etc/squid/squid.conf &&' >> proxy-server/docker-compose.yml
+	@echo '        echo \"http_access deny all\" >> /etc/squid/squid.conf &&' >> proxy-server/docker-compose.yml
+	@echo '        echo \"cache_mem 256 MB\" >> /etc/squid/squid.conf &&' >> proxy-server/docker-compose.yml
+	@echo '        echo \"maximum_object_size 1024 MB\" >> /etc/squid/squid.conf &&' >> proxy-server/docker-compose.yml
+	@echo '        echo \"cache_dir ufs /var/cache/squid 100 16 256\" >> /etc/squid/squid.conf &&' >> proxy-server/docker-compose.yml
+	@echo '        echo \"coredump_dir /var/cache/squid\" >> /etc/squid/squid.conf &&' >> proxy-server/docker-compose.yml
+	@echo '        echo \"access_log /var/log/squid/access.log\" >> /etc/squid/squid.conf &&' >> proxy-server/docker-compose.yml
+	@echo '        echo \"cache_log /var/log/squid/cache.log\" >> /etc/squid/squid.conf &&' >> proxy-server/docker-compose.yml
+	@echo '        echo \"pid_filename /run/squid.pid\" >> /etc/squid/squid.conf &&' >> proxy-server/docker-compose.yml
 	@echo '        squid -N -f /etc/squid/squid.conf"' >> proxy-server/docker-compose.yml
 	@echo '    healthcheck:' >> proxy-server/docker-compose.yml
 	@echo '      test: ["CMD", "squidclient", "-h", "localhost", "cache_object://localhost/counters"]' >> proxy-server/docker-compose.yml
@@ -98,7 +109,7 @@ create-configs:
 	@echo '    image: vimagick/dante:latest' >> proxy-server/docker-compose.yml
 	@echo '    container_name: dante_proxy' >> proxy-server/docker-compose.yml
 	@echo '    ports:' >> proxy-server/docker-compose.yml
-	@echo '      - "$${SOCKS_PORT:-1080}:1080"' >> proxy-server/docker-compose.yml
+	@echo '      - "$${SOCKS_PORT:-1080}:$${SOCKS_PORT:-1080}"' >> proxy-server/docker-compose.yml
 	@echo '    volumes:' >> proxy-server/docker-compose.yml
 	@echo '      - ./sockd.conf:/etc/sockd.conf' >> proxy-server/docker-compose.yml
 	@echo '      - ./credentials/dante.passwd:/etc/dante.passwd:ro' >> proxy-server/docker-compose.yml
@@ -110,8 +121,22 @@ create-configs:
 	@echo '      - proxy_network' >> proxy-server/docker-compose.yml
 	@echo '    command: >' >> proxy-server/docker-compose.yml
 	@echo '      /bin/sh -c "' >> proxy-server/docker-compose.yml
-	@echo '        sed \"s/port = .*/port = $${SOCKS_PORT:-1080}/\" /etc/sockd.conf > /tmp/sockd.conf &&' >> proxy-server/docker-compose.yml
-	@echo '        cat /tmp/sockd.conf > /etc/sockd.conf &&' >> proxy-server/docker-compose.yml
+	@echo '        echo \"logoutput: stderr\" > /etc/sockd.conf &&' >> proxy-server/docker-compose.yml
+	@echo '        echo \"internal: 0.0.0.0 port = $${SOCKS_PORT:-1080}\" >> /etc/sockd.conf &&' >> proxy-server/docker-compose.yml
+	@echo '        echo \"external: eth0\" >> /etc/sockd.conf &&' >> proxy-server/docker-compose.yml
+	@echo '        echo \"socksmethod: username\" >> /etc/sockd.conf &&' >> proxy-server/docker-compose.yml
+	@echo '        echo \"user.privileged: root\" >> /etc/sockd.conf &&' >> proxy-server/docker-compose.yml
+	@echo '        echo \"user.notprivileged: nobody\" >> /etc/sockd.conf &&' >> proxy-server/docker-compose.yml
+	@echo '        echo \"client pass {\" >> /etc/sockd.conf &&' >> proxy-server/docker-compose.yml
+	@echo '        echo \"    from: 0.0.0.0/0 to: 0.0.0.0/0\" >> /etc/sockd.conf &&' >> proxy-server/docker-compose.yml
+	@echo '        echo \"    log: error connect disconnect\" >> /etc/sockd.conf &&' >> proxy-server/docker-compose.yml
+	@echo '        echo \"}\" >> /etc/sockd.conf &&' >> proxy-server/docker-compose.yml
+	@echo '        echo \"socks pass {\" >> /etc/sockd.conf &&' >> proxy-server/docker-compose.yml
+	@echo '        echo \"    from: 0.0.0.0/0 to: 0.0.0.0/0\" >> /etc/sockd.conf &&' >> proxy-server/docker-compose.yml
+	@echo '        echo \"    command: bind connect udpassociate\" >> /etc/sockd.conf &&' >> proxy-server/docker-compose.yml
+	@echo '        echo \"    log: error connect disconnect\" >> /etc/sockd.conf &&' >> proxy-server/docker-compose.yml
+	@echo '        echo \"    socksmethod: username\" >> /etc/sockd.conf &&' >> proxy-server/docker-compose.yml
+	@echo '        echo \"}\" >> /etc/sockd.conf &&' >> proxy-server/docker-compose.yml
 	@echo '        sockd -f /etc/sockd.conf"' >> proxy-server/docker-compose.yml
 	@echo '    healthcheck:' >> proxy-server/docker-compose.yml
 	@echo '      test: ["CMD", "nc", "-z", "localhost", "1080"]' >> proxy-server/docker-compose.yml
@@ -124,38 +149,7 @@ create-configs:
 	@echo 'networks:' >> proxy-server/docker-compose.yml
 	@echo '  proxy_network:' >> proxy-server/docker-compose.yml
 	@echo '    driver: bridge' >> proxy-server/docker-compose.yml
-	@echo 'http_port 3128' > proxy-server/squid.conf
-	@echo 'auth_param basic program /usr/lib/squid/basic_ncsa_auth /etc/squid/passwd' >> proxy-server/squid.conf
-	@echo 'auth_param basic realm Proxy Authentication' >> proxy-server/squid.conf
-	@echo 'acl authenticated proxy_auth REQUIRED' >> proxy-server/squid.conf
-	@echo 'http_access allow authenticated' >> proxy-server/squid.conf
-	@echo 'http_access deny all' >> proxy-server/squid.conf
-	@echo 'cache_mem 256 MB' >> proxy-server/squid.conf
-	@echo 'maximum_object_size 1024 MB' >> proxy-server/squid.conf
-	@echo 'cache_dir ufs /var/cache/squid 100 16 256' >> proxy-server/squid.conf
-	@echo 'coredump_dir /var/cache/squid' >> proxy-server/squid.conf
-	@echo 'access_log /var/log/squid/access.log' >> proxy-server/squid.conf
-	@echo 'cache_log /var/log/squid/cache.log' >> proxy-server/squid.conf
-	@echo 'pid_filename /run/squid.pid' >> proxy-server/squid.conf
-	@echo 'logoutput: stderr' > proxy-server/sockd.conf
-	@echo 'internal: 0.0.0.0 port = 1080' >> proxy-server/sockd.conf
-	@echo 'external: eth0' >> proxy-server/sockd.conf
-	@echo 'socksmethod: username' >> proxy-server/sockd.conf
-	@echo 'user.privileged: root' >> proxy-server/sockd.conf
-	@echo 'user.notprivileged: nobody' >> proxy-server/sockd.conf
-	@echo 'client pass {' >> proxy-server/sockd.conf
-	@echo '    from: 0.0.0.0/0 to: 0.0.0.0/0' >> proxy-server/sockd.conf
-	@echo '    log: error connect disconnect' >> proxy-server/sockd.conf
-	@echo '}' >> proxy-server/sockd.conf
-	@echo 'socks pass {' >> proxy-server/sockd.conf
-	@echo '    from: 0.0.0.0/0 to: 0.0.0.0/0' >> proxy-server/sockd.conf
-	@echo '    command: bind connect udpassociate' >> proxy-server/sockd.conf
-	@echo '    log: error connect disconnect' >> proxy-server/sockd.conf
-	@echo '    socksmethod: username' >> proxy-server/sockd.conf
-	@echo '}' >> proxy-server/sockd.conf
 	@chmod 777 proxy-server/cache
-	@chmod 644 proxy-server/squid.conf
-	@chmod 644 proxy-server/sockd.conf
 	@echo "$(GREEN)Конфигурационные файлы созданы$(NC)"
 
 # Setup configuration files and passwords
