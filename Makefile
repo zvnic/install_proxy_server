@@ -70,7 +70,7 @@ clean:
 	@sudo ufw delete allow $(HTTP_PORT) || true
 	@sudo ufw delete allow $(SOCKS_PORT) || true
 	@sudo ufw reload
-	@rm -rf proxy-server
+	@sudo rm -rf proxy-server
 	@rm -f proxy_credentials.txt
 	@rm -f .env
 	@echo "Прокси-серверы остановлены и конфигурации удалены"
