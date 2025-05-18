@@ -2,21 +2,21 @@ version: '3.8'
 
 services:
   dante:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: vimagick/dante:latest
     container_name: dante_proxy
     ports:
-      - "${SOCKS_PORT:-1080}:1080"
+      - "${SOCKS_PORT}:1080/tcp"
+    volumes:
+      - ./danted.conf:/etc/danted.conf:ro
+      - ./entrypoint.sh:/entrypoint.sh:ro
     environment:
-      - TZ=UTC
-      - SOCKS_PORT=${SOCKS_PORT:-1080}
-      - USER=${USER:-proxyuser}
-      - PASS=${PASS:-proxypass}
+      - SOCKS_USER=${SOCKS_USER}
+      - SOCKS_PASS=${SOCKS_PASS}
+    entrypoint: ["/entrypoint.sh"]
     restart: unless-stopped
     networks:
-      - proxy_network
+      - proxy-network
 
 networks:
-  proxy_network:
+  proxy-network:
     driver: bridge

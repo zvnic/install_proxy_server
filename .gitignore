@@ -19,8 +19,7 @@ proxy-server/squid/cache/
 
 # Environment
 .env
-.env.*
-!.env.example
+
 
 # IDE
 .idea/
