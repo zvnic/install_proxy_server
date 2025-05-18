@@ -12,6 +12,7 @@ services:
       - ./cache:/var/cache/squid
     environment:
       - TZ=UTC
+      - HTTP_PORT=${HTTP_PORT:-3128}
     restart: unless-stopped
     networks:
       - proxy_network
@@ -33,6 +34,7 @@ services:
       - ./credentials/dante.passwd:/etc/dante.passwd:ro
     environment:
       - TZ=UTC
+      - SOCKS_PORT=${SOCKS_PORT:-1080}
     restart: unless-stopped
     networks:
       - proxy_network
