@@ -1,9 +1,11 @@
 #!/bin/bash
 set -e
 
-# Создаем пользователя
-adduser -D -H -s /sbin/nologin ${USER:-proxyuser}
-echo "${USER:-proxyuser}:${PASS:-proxypass}" | chpasswd
+# Проверяем существование пользователя и создаем если не существует
+if ! id "${USER:-proxyuser}" >/dev/null 2>&1; then
+    adduser -D -H -s /sbin/nologin "${USER:-proxyuser}"
+    echo "${USER:-proxyuser}:${PASS:-proxypass}" | chpasswd
+fi
 
 # Генерируем конфигурацию
 cat > /etc/danted.conf << EOF

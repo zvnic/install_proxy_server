@@ -7,7 +7,8 @@ COPY entrypoint.sh /app/
 COPY danted.conf.template /app/
 
 RUN chmod +x /app/entrypoint.sh && \
-    chown root:root /app/entrypoint.sh
+    chown root:root /app/entrypoint.sh && \
+    ln -s /usr/sbin/danted /usr/bin/danted
 
 EXPOSE 1080
 
