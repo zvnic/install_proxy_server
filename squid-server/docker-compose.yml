@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  squid:
+    image: ubuntu/squid:latest
+    container_name: squid_proxy
+    ports:
+      - "${HTTP_PORT}:3128/tcp"
+    volumes:
+      - ./squid.conf:/etc/squid/squid.conf:ro
+      - ./entrypoint.sh:/entrypoint.sh:ro
+    environment:
+      - HTTP_USER=${HTTP_USER}
+      - HTTP_PASS=${HTTP_PASS}
+    entrypoint: ["/entrypoint.sh"]
+    restart: unless-stopped
+    networks:
+      - proxy-network
+
+networks:
+  proxy-network:
+    driver: bridge
