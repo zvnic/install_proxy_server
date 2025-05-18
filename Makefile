@@ -9,6 +9,7 @@ SHELL := /bin/bash
 
 # Цвета для вывода
 GREEN = \033[0;32m
+RED = \033[0;31m
 NC = \033[0m
 
 # Default target
@@ -201,3 +202,19 @@ restart:
 show-config:
 	@echo "$(GREEN)Текущая конфигурация:$(NC)"
 	@cat .env 2>/dev/null || echo "Конфигурация не найдена"
+
+# Test proxy connection
+.PHONY: test-proxy
+test-proxy:
+	@echo "$(GREEN)Проверка подключения к SOCKS5 прокси...$(NC)"
+	@if [ -f .env ]; then \
+		. .env; \
+		echo "Используем порт: $$SOCKS_PORT"; \
+		echo "Используем пользователя: $$USER"; \
+		echo "Проверяем подключение..."; \
+		curl --socks5-hostname localhost:$$SOCKS_PORT --proxy-user $$USER:$$PASS http://ifconfig.me 2>/dev/null || { echo "$(RED)Ошибка подключения к прокси$(NC)"; exit 1; }; \
+		echo "$(GREEN)Прокси работает корректно$(NC)"; \
+	else \
+		echo "$(RED)Файл конфигурации не найден. Сначала выполните make config$(NC)"; \
+		exit 1; \
+	fi
