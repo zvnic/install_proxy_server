@@ -29,8 +29,7 @@ EOF
 
 # Проверяем наличие danted
 which danted
-ls -l /usr/local/sbin/danted
-ls -l /usr/sbin/danted
+ls -l $(which danted)
 
-# Запускаем Dante
-exec /usr/local/sbin/danted -f /etc/danted.conf
+# Запускаем Dante через обертку
+exec /app/run-danted.sh -f /etc/danted.conf
