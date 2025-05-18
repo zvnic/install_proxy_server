@@ -5,6 +5,7 @@ PASS ?= proxypass
 HTTP_PORT ?= 3128
 SOCKS_PORT ?= 1080
 IP := $(shell curl -s ifconfig.me || echo "YOUR_SERVER_IP")
+SHELL := /bin/bash
 
 # Default target
 .PHONY: all
@@ -29,7 +30,7 @@ config:
 	@echo "Настройка прокси-серверов..."
 	@read -p "Введите имя пользователя [$(USER)]: " username; \
 	USER=$${username:-$(USER)}; \
-	read -sp "Введите пароль [$(PASS)]: " password; \
+	read -p "Введите пароль [$(PASS)]: " password; \
 	echo ""; \
 	PASS=$${password:-$(PASS)}; \
 	read -p "Введите порт HTTP прокси [$(HTTP_PORT)]: " http_port; \
@@ -41,6 +42,14 @@ config:
 	echo "HTTP_PORT=$$HTTP_PORT" >> .env; \
 	echo "SOCKS_PORT=$$SOCKS_PORT" >> .env; \
 	echo "Конфигурация сохранена в .env файл"
+
+# Create users
+.PHONY: create-users
+create-users:
+	@mkdir -p proxy-server/credentials
+	@htpasswd -bc proxy-server/credentials/squid.passwd $(USER) $(PASS)
+	@echo "$(USER):$(PASS)" > proxy-server/credentials/dante.passwd
+	@chmod 644 proxy-server/credentials/*.passwd
 
 # Setup configuration files and passwords
 .PHONY: setup
@@ -111,15 +120,6 @@ socks pass {\n\
 	@echo "http://$(USER):$(PASS)@localhost:$(HTTP_PORT)" > proxy_credentials.txt
 	@echo "socks5://$(USER):$(PASS)@localhost:$(SOCKS_PORT)" >> proxy_credentials.txt
 	@echo "Прокси-серверы запущены. Данные для доступа сохранены в proxy_credentials.txt"
-
-# Create users
-.PHONY: create-users
-create-users:
-	@mkdir -p proxy-server/credentials
-	@htpasswd -bc proxy-server/credentials/squid.passwd $(USER) $(PASS)
-	@echo "$(USER):$(PASS)" > proxy-server/credentials/dante.passwd
-	@chmod 644 proxy-server/credentials/*.passwd
-	@chown 31:31 proxy-server/credentials/squid.passwd  # 31 - это UID пользователя squid в контейнере
 
 # Clean up
 .PHONY: clean
