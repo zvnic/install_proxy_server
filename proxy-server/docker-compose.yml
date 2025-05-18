@@ -18,7 +18,8 @@ services:
       - proxy_network
     command: >
       /bin/sh -c "
-        sed -i 's/^http_port .*/http_port ${HTTP_PORT:-3128}/' /etc/squid/squid.conf &&
+        sed 's/^http_port .*/http_port ${HTTP_PORT:-3128}/' /etc/squid/squid.conf > /tmp/squid.conf &&
+        mv /tmp/squid.conf /etc/squid/squid.conf &&
         squid -f /etc/squid/squid.conf -NY
       "
     healthcheck:
@@ -45,7 +46,8 @@ services:
       - proxy_network
     command: >
       /bin/sh -c "
-        sed -i 's/port = .*/port = ${SOCKS_PORT:-1080}/' /etc/sockd.conf &&
+        sed 's/port = .*/port = ${SOCKS_PORT:-1080}/' /etc/sockd.conf > /tmp/sockd.conf &&
+        mv /tmp/sockd.conf /etc/sockd.conf &&
         sockd -f /etc/sockd.conf
       "
     healthcheck:
