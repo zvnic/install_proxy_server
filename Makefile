@@ -67,6 +67,7 @@ setup: config create-users
 		echo '    volumes:' >> docker-compose.yml && \
 		echo '      - ./squid.conf:/etc/squid/squid.conf' >> docker-compose.yml && \
 		echo '      - ./credentials/squid.passwd:/etc/squid/passwd:ro' >> docker-compose.yml && \
+		echo '      - ./cache:/var/cache/squid' >> docker-compose.yml && \
 		echo '    environment:' >> docker-compose.yml && \
 		echo '      - TZ=UTC' >> docker-compose.yml && \
 		echo '    restart: unless-stopped' >> docker-compose.yml && \
@@ -89,15 +90,19 @@ setup: config create-users
 		echo '  proxy_network:' >> docker-compose.yml && \
 		echo '    driver: bridge' >> docker-compose.yml
 	@cd proxy-server && \
-		echo "auth_param basic program /usr/lib/squid/basic_ncsa_auth /etc/squid/passwd\n\
+		echo "http_port 3128\n\
+auth_param basic program /usr/lib/squid/basic_ncsa_auth /etc/squid/passwd\n\
 auth_param basic realm Proxy Authentication\n\
 acl authenticated proxy_auth REQUIRED\n\
 http_access allow authenticated\n\
 http_access deny all\n\
-http_port 3128\n\
 cache_mem 256 MB\n\
 maximum_object_size 1024 MB\n\
-cache_dir ufs /var/cache/squid 100 16 256" > squid.conf
+cache_dir ufs /var/cache/squid 100 16 256\n\
+coredump_dir /var/cache/squid\n\
+access_log /var/log/squid/access.log\n\
+cache_log /var/log/squid/cache.log\n\
+pid_filename /run/squid.pid" > squid.conf
 	@cd proxy-server && \
 		echo "logoutput: stderr\n\
 internal: 0.0.0.0 port = 1080\n\
@@ -116,6 +121,7 @@ socks pass {\n\
     log: connect disconnect\n\
     user: authenticated\n\
 }" > sockd.conf
+	@cd proxy-server && mkdir -p cache && chmod 777 cache
 	@cd proxy-server && docker-compose up -d
 	@echo "http://$(USER):$(PASS)@localhost:$(HTTP_PORT)" > proxy_credentials.txt
 	@echo "socks5://$(USER):$(PASS)@localhost:$(SOCKS_PORT)" >> proxy_credentials.txt
