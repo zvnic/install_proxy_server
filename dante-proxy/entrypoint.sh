@@ -1,4 +1,5 @@
-#!/bin/sh
+#!/bin/bash
+set -e
 
 # Создаем пользователя
 adduser -D -H -s /sbin/nologin ${USER:-proxyuser}
