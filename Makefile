@@ -55,73 +55,8 @@ create-users:
 .PHONY: setup
 setup: config create-users
 	@echo "Setting up configuration files..."
-	@mkdir -p proxy-server
-	@cd proxy-server && \
-		echo 'version: "3.8"' > docker-compose.yml && \
-		echo 'services:' >> docker-compose.yml && \
-		echo '  squid:' >> docker-compose.yml && \
-		echo '    image: ubuntu/squid:latest' >> docker-compose.yml && \
-		echo '    container_name: squid_proxy' >> docker-compose.yml && \
-		echo '    ports:' >> docker-compose.yml && \
-		echo '      - "$(HTTP_PORT):3128"' >> docker-compose.yml && \
-		echo '    volumes:' >> docker-compose.yml && \
-		echo '      - ./squid.conf:/etc/squid/squid.conf' >> docker-compose.yml && \
-		echo '      - ./credentials/squid.passwd:/etc/squid/passwd:ro' >> docker-compose.yml && \
-		echo '      - ./cache:/var/cache/squid' >> docker-compose.yml && \
-		echo '    environment:' >> docker-compose.yml && \
-		echo '      - TZ=UTC' >> docker-compose.yml && \
-		echo '    restart: unless-stopped' >> docker-compose.yml && \
-		echo '    networks:' >> docker-compose.yml && \
-		echo '      - proxy_network' >> docker-compose.yml && \
-		echo '  dante:' >> docker-compose.yml && \
-		echo '    image: vimagick/dante:latest' >> docker-compose.yml && \
-		echo '    container_name: dante_proxy' >> docker-compose.yml && \
-		echo '    ports:' >> docker-compose.yml && \
-		echo '      - "$(SOCKS_PORT):1080"' >> docker-compose.yml && \
-		echo '    volumes:' >> docker-compose.yml && \
-		echo '      - ./sockd.conf:/etc/sockd.conf' >> docker-compose.yml && \
-		echo '      - ./credentials/dante.passwd:/etc/dante.passwd:ro' >> docker-compose.yml && \
-		echo '    environment:' >> docker-compose.yml && \
-		echo '      - TZ=UTC' >> docker-compose.yml && \
-		echo '    restart: unless-stopped' >> docker-compose.yml && \
-		echo '    networks:' >> docker-compose.yml && \
-		echo '      - proxy_network' >> docker-compose.yml && \
-		echo 'networks:' >> docker-compose.yml && \
-		echo '  proxy_network:' >> docker-compose.yml && \
-		echo '    driver: bridge' >> docker-compose.yml
-	@cd proxy-server && \
-		echo "http_port 3128\n\
-auth_param basic program /usr/lib/squid/basic_ncsa_auth /etc/squid/passwd\n\
-auth_param basic realm Proxy Authentication\n\
-acl authenticated proxy_auth REQUIRED\n\
-http_access allow authenticated\n\
-http_access deny all\n\
-cache_mem 256 MB\n\
-maximum_object_size 1024 MB\n\
-cache_dir ufs /var/cache/squid 100 16 256\n\
-coredump_dir /var/cache/squid\n\
-access_log /var/log/squid/access.log\n\
-cache_log /var/log/squid/cache.log\n\
-pid_filename /run/squid.pid" > squid.conf
-	@cd proxy-server && \
-		echo "logoutput: stderr\n\
-internal: 0.0.0.0 port = 1080\n\
-external: eth0\n\
-method: username\n\
-user.privileged: root\n\
-user.unprivileged: nobody\n\
-clientmethod: none\n\
-client pass {\n\
-    from: 0.0.0.0/0 to: 0.0.0.0/0\n\
-    log: connect disconnect\n\
-}\n\
-socks pass {\n\
-    from: 0.0.0.0/0 to: 0.0.0.0/0\n\
-    command: bind connect udpassociate\n\
-    log: connect disconnect\n\
-    user: authenticated\n\
-}" > sockd.conf
-	@cd proxy-server && mkdir -p cache && chmod 777 cache
+	@mkdir -p proxy-server/cache
+	@chmod 777 proxy-server/cache
 	@cd proxy-server && docker-compose up -d
 	@echo "http://$(USER):$(PASS)@localhost:$(HTTP_PORT)" > proxy_credentials.txt
 	@echo "socks5://$(USER):$(PASS)@localhost:$(SOCKS_PORT)" >> proxy_credentials.txt
