@@ -57,13 +57,13 @@ setup: config create-users
 	@echo "Setting up configuration files..."
 	@mkdir -p proxy-server
 	@cd proxy-server && \
-		echo "version: '3.8'\n\
+		echo 'version: "3.8"\n\
 services:\n\
   squid:\n\
     image: ubuntu/squid:latest\n\
     container_name: squid_proxy\n\
     ports:\n\
-      - \"$(HTTP_PORT):3128\"\n\
+      - "$(HTTP_PORT):3128"\n\
     volumes:\n\
       - ./squid.conf:/etc/squid/squid.conf\n\
       - ./credentials/squid.passwd:/etc/squid/passwd:ro\n\
@@ -76,7 +76,7 @@ services:\n\
     image: vimagick/dante:latest\n\
     container_name: dante_proxy\n\
     ports:\n\
-      - \"$(SOCKS_PORT):1080\"\n\
+      - "$(SOCKS_PORT):1080"\n\
     volumes:\n\
       - ./sockd.conf:/etc/sockd.conf\n\
       - ./credentials/dante.passwd:/etc/dante.passwd:ro\n\
@@ -87,7 +87,7 @@ services:\n\
       - proxy_network\n\
 networks:\n\
   proxy_network:\n\
-    driver: bridge" > docker-compose.yml
+    driver: bridge' > docker-compose.yml
 	@cd proxy-server && \
 		echo "auth_param basic program /usr/lib/squid/basic_ncsa_auth /etc/squid/passwd\n\
 auth_param basic realm Proxy Authentication\n\
