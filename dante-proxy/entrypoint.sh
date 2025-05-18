@@ -28,4 +28,4 @@ socks pass {
 EOF
 
 # Запускаем Dante
-exec danted -f /etc/danted.conf
+exec /usr/sbin/danted -f /etc/danted.conf
