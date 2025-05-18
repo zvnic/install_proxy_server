@@ -23,63 +23,76 @@
 - Apache2-utils (для создания файлов паролей)
 - curl (для проверки работоспособности)
 
-## Установка
+## Установка на сервере
 
-1. Клонируйте репозиторий:
+1. Подключитесь к серверу:
 ```bash
-git clone <repository-url>
-cd proxy-server-project
+ssh user@your-server-ip
 ```
 
-2. Запустите установку:
+2. Установите необходимые пакеты:
+```bash
+sudo apt update
+sudo apt install -y git make docker.io docker-compose apache2-utils curl
+```
+
+3. Клонируйте репозиторий:
+```bash
+git clone https://github.com/zvnic/install_proxy_server.git
+cd install_proxy_server
+```
+
+4. Запустите установку:
 ```bash
 make install
 ```
 
-## Использование
-
-### Запуск сервера
-
+5. Настройте и запустите прокси-серверы:
 ```bash
 make setup
 ```
 
-При первом запуске будет создана структура проекта и настроены контейнеры. Вам будет предложено ввести:
-- Имя пользователя (по умолчанию: proxyuser)
-- Пароль (по умолчанию: proxypass)
-- Порт HTTP прокси (по умолчанию: 3128)
-- Порт SOCKS5 прокси (по умолчанию: 1080)
+6. Настройте файрвол (опционально):
+```bash
+sudo ufw allow $(grep HTTP_PORT .env | cut -d'=' -f2)/tcp
+sudo ufw allow $(grep SOCKS_PORT .env | cut -d'=' -f2)/tcp
+sudo ufw reload
+```
 
-Все настройки сохраняются в файл `.env`.
-
-### Проверка статуса
-
+7. Проверьте работу прокси:
 ```bash
 make check
 ```
 
-### Просмотр логов
+### Использование прокси
 
+После установки вы можете использовать прокси следующим образом:
+
+1. HTTP прокси:
 ```bash
-make logs
+http://username:password@your-server-ip:3128
 ```
 
-### Перезапуск серверов
-
+2. SOCKS5 прокси:
 ```bash
-make restart
+socks5://username:password@your-server-ip:1080
 ```
 
-### Просмотр текущей конфигурации
+Где:
+- `username` и `password` - учетные данные, которые вы указали при установке
+- `your-server-ip` - IP-адрес вашего сервера
+- `3128` и `1080` - порты, которые вы указали при установке (или порты по умолчанию)
 
+### Проверка доступности прокси
+
+1. Проверка HTTP прокси:
 ```bash
-make show-config
+curl -x http://username:password@your-server-ip:3128 http://example.com
 ```
 
-### Остановка и очистка
-
+2. Проверка SOCKS5 прокси:
 ```bash
-make clean
+curl --socks5-hostname socks5://username:password@your-server-ip:1080 http://example.com
 ```
 
 ## Структура проекта
