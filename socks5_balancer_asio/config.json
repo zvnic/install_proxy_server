@@ -17,23 +17,6 @@
     "stateServerHost": "0.0.0.0",
     "stateServerPort": 8080,
     "servers": [
-        {
-            "host": "89.111.140.163",
-            "port": 58602,
-            "username": "proxyuser",
-            "password": "proxypass"
-        },
-        {
-            "host": "89.111.131.186",
-            "port": 58602,
-            "username": "proxyuser",
-            "password": "proxypass"
-        },
-        {
-            "host": "89.111.137.28",
-            "port": 58602,
-            "username": "proxyuser",
-            "password": "proxypass"
-        }
+        
     ]
 } 
