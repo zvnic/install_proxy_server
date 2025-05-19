@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   socks5balancer:
-    image: fossforreal/socks5balancerasio-docker
+    image: fossforreal/socks5balancerasio-docker:latest # Укажите конкретный тег, если известен
     container_name: socks5_balancer
     ports:
       - "${BALANCER_PORT}:1080/tcp"
