@@ -1,0 +1,27 @@
+{
+    "listenHost": "0.0.0.0",
+    "listenPort": 1080,
+    "balanceType": "random",
+    "retryTimes": 3,
+    "connectTimeout": 2000,
+    "tcpCheckPeriod": 5000,
+    "tcpCheckStart": 1000,
+    "connectCheckPeriod": 300000,
+    "connectCheckStart": 1000,
+    "testRemoteHost": "www.google.com",
+    "testRemotePort": 443,
+    "auth": {
+      "username": "balanceruser",
+      "password": "balancerpass"
+    },
+    "stateServerHost": "0.0.0.0",
+    "stateServerPort": 8080,
+    "servers": [
+      {
+        "host": "192.168.10.1",
+        "port": 58602,
+        "username": "proxyuser",
+        "password": "proxypass"
+      }
+    ]
+  }

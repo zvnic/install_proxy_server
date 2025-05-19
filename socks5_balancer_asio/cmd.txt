@@ -1,0 +1,9 @@
+
+sudo ufw allow 1080/tcp
+sudo ufw allow 8080/tcp
+
+docker-compose up -d
+
+docker logs socks5_balancer
+
+curl --socks5-hostname localhost:1080 --proxy-user proxyuser:proxypass https://api.ipify.org
