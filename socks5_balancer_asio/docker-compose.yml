@@ -2,16 +2,19 @@ version: '3.8'
 
 services:
   socks5balancer:
-    image: fossforreal/socks5balancerasio-docker:latest # Укажите конкретный тег, если известен
+    image: fossforreal/socks5balancerasio:latest-amd64
     container_name: socks5_balancer
     ports:
-      - "${BALANCER_PORT}:1080/tcp"
-      - "${STATE_SERVER_PORT}:8080/tcp"
+      - "${BALANCER_PORT:-1080}:1080/tcp"
+      - "${STATE_SERVER_PORT:-8080}:8080/tcp"
     volumes:
       - ./config.json:/Socks5BalancerAsio/config.json:ro
+      # Раскомментируйте, если используете встроенный веб-сервер
+      # - ./html:/html:ro
     restart: unless-stopped
     networks:
       - proxy-network
+    command: /Socks5BalancerAsio/Socks5BalancerAsio /Socks5BalancerAsio/config.json
 
 networks:
   proxy-network:
